@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // One line of the worst advice an AI could give: confident, concrete, and
@@ -22,8 +22,21 @@ if (ADVICE.trim() !== ADVICE) {
 if (ADVICE.includes("\n") || ADVICE.includes("\r")) {
   fail("Advice must be a single line");
 }
+// Control characters (tabs, escape codes, NUL, ...) would survive the
+// single-line check but corrupt the entry or break the judge's read, so
+// reject any of them outright.
+if (/[\u0000-\u001f\u007f]/.test(ADVICE)) {
+  fail("Advice must not contain control characters");
+}
 
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, "entry.txt"), ADVICE, "utf8");
-console.log(`Wrote ${chars} characters to ${join(outDir, "entry.txt")}`);
+const outPath = join(outDir, "entry.txt");
+writeFileSync(outPath, ADVICE, "utf8");
+// Verify the exact bytes on disk match the validated line: a partial or
+// recoded write must fail loudly instead of shipping a bad entry.
+const written = readFileSync(outPath, "utf8");
+if (written !== ADVICE) {
+  fail("Written output does not match the validated advice");
+}
+console.log(`Wrote ${chars} characters to ${outPath}`);
